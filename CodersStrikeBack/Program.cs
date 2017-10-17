@@ -107,6 +107,8 @@ class Player
             this.id = id;
 
             usedBoost = false;
+
+            lap = 0;
         }
 
         public void update(int x, int y, int vX, int vY, int angle, int nextCheckpointId)
@@ -114,6 +116,12 @@ class Player
             position = new Vector(x, y);
             speed = new Vector(vX, vY);
             this.angle = angle;
+
+            if (nextCheckpointId != this.nextCheckpointId && nextCheckpointId == 1)
+            {
+                lap++;
+            }
+            Console.Error.WriteLine("Pod " + id + " is at lap " + lap);
             this.nextCheckpointId = nextCheckpointId;
         }
 
@@ -127,7 +135,7 @@ class Player
 
             int nextAngle = (int)(180 / Math.PI * Math.Acos(targetVector.scalar(faceVector) / targetVector.length() / faceVector.length()));
 
-            if (!usedBoost)
+            if (!usedBoost && id == 0)
             {
                 usedBoost = true;
                 return cX + " " + cY + " BOOST";
@@ -196,20 +204,13 @@ class Player
         public int id { get; set; }
 
         private bool usedBoost { get; set; }
+
+        private int lap { get; set; }
     }
 
     static void Main(string[] args)
     {
         string[] inputs;
-
-        bool usedBoost = false;
-
-        int frame = -1;
-        int lastX = -1;
-        int lastY = -1;
-        int oppLastX = -1;
-        int oppLastY = -1;
-
         List<Tuple<int, int>> track = new List<Tuple<int, int>>();
 
         int laps = int.Parse(Console.ReadLine());
@@ -222,16 +223,12 @@ class Player
             track.Add(new Tuple<int, int>(cX, cY));
         }
 
-        int lap = 1;
-        Tuple<int, int> checkpoint = null;
-        Tuple<int, int> nextCheckpoint = null;
-
         List<Pod> pods = new List<Pod>();
         for (int i = 0; i < 4; i++)
         {
             pods.Add(new Pod(i, i / 2 + 1));
         }
-        // game loop
+
         while (true)
         {
             for (int i = 0; i < 4; i++)
@@ -251,11 +248,5 @@ class Player
                 Console.WriteLine(pods[i].calculateThrust(pods, track));
             }
         }
-    }
-
-    const int COLLISION_THRESHOLD = 1000;
-    static bool willCollide(Vector speed, Vector oppSpeed, Vector oppPos)
-    {
-        return speed.scalar(oppSpeed) < 0.2 && speed.sub(oppPos.add(oppSpeed)).length() < COLLISION_THRESHOLD;
     }
 }
