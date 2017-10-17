@@ -11,6 +11,7 @@ using System.Collections.Generic;
  **/
 class Player
 {
+
     class Vector
     {
         public Vector(double _x, double _y)
@@ -93,6 +94,8 @@ class Player
         }
     }
 
+
+
     static void Main(string[] args)
     {
         string[] inputs;
@@ -104,10 +107,13 @@ class Player
         int lastY = -1;
         int oppLastX = -1;
         int oppLastY = -1;
-        int lastShield = 0;
 
         List<Tuple<int, int>> track = new List<Tuple<int, int>>();
 
+        bool firstLap = true;
+        int lap = 1;
+        Tuple<int, int> checkpoint = null;
+        Tuple<int, int> nextCheckpoint = null;
         // game loop
         while (true)
         {
@@ -125,11 +131,42 @@ class Player
             int thrustX = nextX;
             int thrustY = nextY;
 
-            Tuple<int, int> checkpoint = new Tuple<int, int>(nextX, nextY);
-            if (!track.Contains(checkpoint))
+            bool newCheckpoint = false;
+            if (checkpoint != null)
             {
-                track.Add(checkpoint);
+                newCheckpoint = checkpoint.Item1 != nextX || checkpoint.Item2 != nextY;
             }
+            checkpoint = new Tuple<int, int>(nextX, nextY);
+            int checkpointIndex = -1;
+            int nextCheckpointIndex = -1;
+            if (firstLap){
+                if (!track.Contains(checkpoint))
+                {
+                    track.Add(checkpoint);
+                }
+                else
+                {
+                    if (track.IndexOf(checkpoint) == 0 && track.Count() > 1)
+                    {
+                        firstLap = false;
+                        lap++;
+                    }
+                }
+            }
+            else
+            {
+                checkpointIndex = track.IndexOf(checkpoint);
+                nextCheckpointIndex = (checkpointIndex + 1) % track.Count();
+                nextCheckpoint = track[nextCheckpointIndex];
+                if (newCheckpoint && checkpointIndex == 0)
+                {
+                    lap++;
+                }
+            }
+
+            Console.Error.WriteLine("First lap: " + firstLap);
+            Console.Error.WriteLine("Checkpoint: " + (checkpointIndex+1) + " Next: " + (nextCheckpointIndex+1));
+            Console.Error.WriteLine("Lap: " + lap);
 
             string trackString = "";
             foreach (Tuple<int, int> cp in track)
@@ -141,6 +178,8 @@ class Player
             Vector oppPos = new Vector(oppX - x, oppY - y);
             Vector oppSpeed = new Vector(0, 0);
             Vector speed = new Vector(0, 0);
+            Vector targetVector = new Vector(nextX - x, nextY - y);
+
             if (frame >= 0)
             {
                 speed = new Vector(x - lastX, y - lastY);
@@ -149,6 +188,10 @@ class Player
                 lastY = y;
                 oppLastX = oppX;
                 oppLastY = oppY;
+            }
+            else
+            {
+                Console.WriteLine(nextX + " " + nextY + " BOOST");
             }
             frame++;
 
@@ -174,12 +217,6 @@ class Player
             if (willCollide(speed, oppSpeed, oppPos))
             {
                 thrustString = "SHIELD";
-                lastShield = frame;
-            }
-            else if (!usedBoost && Math.Abs(nextAngle) < 5 && nextDist > 5000 /*&& speed.length() > 300*/)
-            {
-                thrustString = "BOOST";
-                usedBoost = true;
             }
             else
             {
@@ -189,7 +226,6 @@ class Player
 
             if (Math.Abs(nextAngle) <= 90)
             {
-                Vector targetVector = new Vector(nextX - x, nextY - y);
                 Vector rejection = speed.vectorRejection(targetVector);
                 Console.Error.WriteLine("Speed: " + speed.ToString());
                 Console.Error.WriteLine("Target: " + targetVector.ToString());
