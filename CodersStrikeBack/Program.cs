@@ -94,7 +94,109 @@ class Player
         }
     }
 
+    class Pod
+    {
+        public Pod(int id, int team)
+        {
+            position = null;
+            speed = null;
+            this.angle = 0;
+            this.nextCheckpointId = 0;
 
+            this.team = team;
+            this.id = id;
+
+            usedBoost = false;
+        }
+
+        public void update(int x, int y, int vX, int vY, int angle, int nextCheckpointId)
+        {
+            position = new Vector(x, y);
+            speed = new Vector(vX, vY);
+            this.angle = angle;
+            this.nextCheckpointId = nextCheckpointId;
+        }
+
+        public string calculateThrust(List<Pod> pods, List<Tuple<int, int>> checkpoints)
+        {
+            int cX = checkpoints[nextCheckpointId].Item1;
+            int cY = checkpoints[nextCheckpointId].Item2;
+
+            Vector targetVector = new Vector(cX - position.x, cY - position.y);
+            Vector faceVector = new Vector(Math.Cos(angle * Math.PI / 180), Math.Sin(angle * Math.PI / 180));
+
+            int nextAngle = (int)(180 / Math.PI * Math.Acos(targetVector.scalar(faceVector) / targetVector.length() / faceVector.length()));
+
+            if (!usedBoost)
+            {
+                usedBoost = true;
+                return cX + " " + cY + " BOOST";
+            }
+
+            int thrust = 0;
+            int thrustX = cX;
+            int thrustY = cY;
+            if (Math.Abs(nextAngle) >= 70)
+            {
+                thrust = 0;
+            }
+            else
+            {
+                thrust = 100;
+            }
+
+            const int slowDown = 2000;
+            if (targetVector.length() < slowDown && Math.Abs(nextAngle) < 20)
+            {
+                thrust = (int)(100 * targetVector.length() / slowDown);
+            }
+
+            int closest = 25000;
+            for (int i = 0; i < 4; i++)
+            {
+                if (i == id) continue;
+                closest = (int)Math.Min(position.sub(pods[i].position).length(), closest);
+            }
+
+            //TODO: Check for last checkpoint
+            if (/*!firstLap && !(lap == 3 && checkpointIndex == track.Count() - 1) &&*/
+                closest > 2000 && targetVector.length() < 2000 &&
+                speed.vectorRejection(targetVector).length() < 500)
+            {
+                int nextId = (nextCheckpointId + 1) % checkpoints.Count();
+                Vector nextTarget = new Vector(checkpoints[nextId].Item1 - cX, checkpoints[nextId].Item2 - cY);
+                if (nextTarget.scalar(targetVector) < 0)
+                {
+                    Console.Error.WriteLine("Pod " + id + " Coasting at angle " + nextAngle);
+                    return checkpoints[nextId].Item1 + " " + checkpoints[nextId].Item2 + " 0";
+                }
+            }
+
+
+            if (Math.Abs(nextAngle) <= 90)
+            {
+                Vector rejection = speed.vectorRejection(targetVector);
+                Console.Error.WriteLine("Speed: " + speed.ToString());
+                Console.Error.WriteLine("Target: " + targetVector.ToString());
+                Console.Error.WriteLine("Projection: " + speed.vectorProjection(targetVector).ToString());
+                Console.Error.WriteLine("Rejection: " + speed.vectorRejection(targetVector).ToString());
+                thrustX -= (int)rejection.x * 4;
+                thrustY -= (int)rejection.y * 4;
+            }
+
+            return thrustX + " " + thrustY + " " + thrust;
+        }
+
+        public Vector position { get; set; }
+        public Vector speed { get; set; }
+        public int angle { get; set; }
+        public int nextCheckpointId { get; set; }
+
+        public int team { get; set; }
+        public int id { get; set; }
+
+        private bool usedBoost { get; set; }
+    }
 
     static void Main(string[] args)
     {
@@ -110,145 +212,44 @@ class Player
 
         List<Tuple<int, int>> track = new List<Tuple<int, int>>();
 
-        bool firstLap = true;
+        int laps = int.Parse(Console.ReadLine());
+        int checkpoints = int.Parse(Console.ReadLine());
+        for (int i = 0; i < checkpoints; i++)
+        {
+            inputs = Console.ReadLine().Split(' ');
+            int cX = int.Parse(inputs[0]);
+            int cY = int.Parse(inputs[1]);
+            track.Add(new Tuple<int, int>(cX, cY));
+        }
+
         int lap = 1;
         Tuple<int, int> checkpoint = null;
         Tuple<int, int> nextCheckpoint = null;
+
+        List<Pod> pods = new List<Pod>();
+        for (int i = 0; i < 4; i++)
+        {
+            pods.Add(new Pod(i, i / 2 + 1));
+        }
         // game loop
         while (true)
         {
-            inputs = Console.ReadLine().Split(' ');
-            int x = int.Parse(inputs[0]);
-            int y = int.Parse(inputs[1]);
-            int nextX = int.Parse(inputs[2]); // x position of the next check point
-            int nextY = int.Parse(inputs[3]); // y position of the next check point
-            int nextDist = int.Parse(inputs[4]); // distance to the next checkpoint
-            int nextAngle = int.Parse(inputs[5]); // angle between your pod orientation and the direction of the next checkpoint
-            inputs = Console.ReadLine().Split(' ');
-            int oppX = int.Parse(inputs[0]);
-            int oppY = int.Parse(inputs[1]);
-
-            int thrustX = nextX;
-            int thrustY = nextY;
-
-            bool newCheckpoint = false;
-            if (checkpoint != null)
+            for (int i = 0; i < 4; i++)
             {
-                newCheckpoint = checkpoint.Item1 != nextX || checkpoint.Item2 != nextY;
+                inputs = Console.ReadLine().Split(' ');
+                pods[i].update(
+                    int.Parse(inputs[0]),
+                    int.Parse(inputs[1]),
+                    int.Parse(inputs[2]),
+                    int.Parse(inputs[3]),
+                    int.Parse(inputs[4]),
+                    int.Parse(inputs[5]));
             }
-            checkpoint = new Tuple<int, int>(nextX, nextY);
-            int checkpointIndex = -1;
-            int nextCheckpointIndex = -1;
-            if (firstLap){
-                if (!track.Contains(checkpoint))
-                {
-                    track.Add(checkpoint);
-                }
-                else
-                {
-                    if (track.IndexOf(checkpoint) == 0 && track.Count() > 1)
-                    {
-                        firstLap = false;
-                        lap++;
-                    }
-                }
-            }
-            else
+
+            for (int i = 0; i < 2; i++)
             {
-                checkpointIndex = track.IndexOf(checkpoint);
-                nextCheckpointIndex = (checkpointIndex + 1) % track.Count();
-                nextCheckpoint = track[nextCheckpointIndex];
-                if (newCheckpoint && checkpointIndex == 0)
-                {
-                    lap++;
-                }
+                Console.WriteLine(pods[i].calculateThrust(pods, track));
             }
-
-            Console.Error.WriteLine("First lap: " + firstLap);
-            Console.Error.WriteLine("Checkpoint: " + (checkpointIndex+1) + " Next: " + (nextCheckpointIndex+1));
-            Console.Error.WriteLine("Lap: " + lap);
-
-            string trackString = "";
-            foreach (Tuple<int, int> cp in track)
-            {
-                trackString += cp + ", ";
-            }
-            Console.Error.WriteLine(trackString);
-
-            Vector oppPos = new Vector(oppX - x, oppY - y);
-            Vector oppSpeed = new Vector(0, 0);
-            Vector speed = new Vector(0, 0);
-            Vector targetVector = new Vector(nextX - x, nextY - y);
-
-            if (frame >= 0)
-            {
-                speed = new Vector(x - lastX, y - lastY);
-                oppSpeed = new Vector(oppX - oppLastX, oppY - oppLastY);
-                lastX = x;
-                lastY = y;
-                oppLastX = oppX;
-                oppLastY = oppY;
-            }
-            else
-            {
-                frame++;
-                Console.WriteLine(nextX + " " + nextY + " BOOST");
-                continue;
-            }
-            frame++;
-
-            int thrust = 0;
-            if (Math.Abs(nextAngle) >= 70)
-            {
-                thrust = 0;
-            }
-            else
-            {
-                thrust = 100;
-            }
-
-            const int slowDown = 2000;
-            if (nextDist < slowDown && Math.Abs(nextAngle) < 20)
-            {
-                thrust = 100 * nextDist / slowDown;
-            }
-
-            if (!firstLap && !(lap == 3 && checkpointIndex == track.Count()-1) && 
-                oppPos.length() > 2000 && targetVector.length() < 2000 && 
-                speed.vectorRejection(targetVector).length() < 500
-                && new Vector(nextCheckpoint.Item1 - nextX, nextCheckpoint.Item2 - nextY).scalar(targetVector) < 0)
-            {
-                Console.Error.WriteLine("Coasting at angle " + nextAngle);
-                Console.WriteLine(nextCheckpoint.Item1 + " " + nextCheckpoint.Item2 + " 0");
-                continue;
-            }
-
-
-            string thrustString;
-
-            if (willCollide(speed, oppSpeed, oppPos))
-            {
-                thrustString = "SHIELD";
-            }
-            else
-            {
-                thrust = Math.Min(100, Math.Max(0, thrust));
-                thrustString = "" + thrust;
-            }
-
-            if (Math.Abs(nextAngle) <= 90)
-            {
-                Vector rejection = speed.vectorRejection(targetVector);
-                Console.Error.WriteLine("Speed: " + speed.ToString());
-                Console.Error.WriteLine("Target: " + targetVector.ToString());
-                Console.Error.WriteLine("Projection: " + speed.vectorProjection(targetVector).ToString());
-                Console.Error.WriteLine("Rejection: " + speed.vectorRejection(targetVector).ToString());
-                thrustX -= (int)rejection.x * 4;
-                thrustY -= (int)rejection.y * 4;
-            }
-
-
-            Console.WriteLine(thrustX + " " + thrustY + " " + thrustString);
         }
     }
 
