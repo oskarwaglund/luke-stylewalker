@@ -191,7 +191,9 @@ class Player
             }
             else
             {
+                frame++;
                 Console.WriteLine(nextX + " " + nextY + " BOOST");
+                continue;
             }
             frame++;
 
@@ -205,10 +207,20 @@ class Player
                 thrust = 100;
             }
 
-            const int slowDown = 1000;
+            const int slowDown = 2000;
             if (nextDist < slowDown && Math.Abs(nextAngle) < 20)
             {
                 thrust = 100 * nextDist / slowDown;
+            }
+
+            if (!firstLap && !(lap == 3 && checkpointIndex == track.Count()-1) && 
+                oppPos.length() > 2000 && targetVector.length() < 2000 && 
+                speed.vectorRejection(targetVector).length() < 500
+                && new Vector(nextCheckpoint.Item1 - nextX, nextCheckpoint.Item2 - nextY).scalar(targetVector) < 0)
+            {
+                Console.Error.WriteLine("Coasting at angle " + nextAngle);
+                Console.WriteLine(nextCheckpoint.Item1 + " " + nextCheckpoint.Item2 + " 0");
+                continue;
             }
 
 
@@ -231,8 +243,8 @@ class Player
                 Console.Error.WriteLine("Target: " + targetVector.ToString());
                 Console.Error.WriteLine("Projection: " + speed.vectorProjection(targetVector).ToString());
                 Console.Error.WriteLine("Rejection: " + speed.vectorRejection(targetVector).ToString());
-                thrustX -= (int)rejection.x * 2;
-                thrustY -= (int)rejection.y * 2;
+                thrustX -= (int)rejection.x * 4;
+                thrustY -= (int)rejection.y * 4;
             }
 
 
@@ -243,6 +255,6 @@ class Player
     const int COLLISION_THRESHOLD = 1000;
     static bool willCollide(Vector speed, Vector oppSpeed, Vector oppPos)
     {
-        return speed.sub(oppPos.add(oppSpeed)).length() < COLLISION_THRESHOLD;
+        return speed.scalar(oppSpeed) < 0.2 && speed.sub(oppPos.add(oppSpeed)).length() < COLLISION_THRESHOLD;
     }
 }
