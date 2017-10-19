@@ -92,6 +92,12 @@ class Player
         {
             return "{" + x + ", " + y + "}";
         }
+
+        public int angleTo(Vector v)
+        {
+            return (int)(180 / Math.PI * Math.Acos(scalar(v) / length() / v.length()));
+        }
+
     }
 
     class Pod
@@ -125,15 +131,32 @@ class Player
             this.nextCheckpointId = nextCheckpointId;
         }
 
-        public string calculateThrust(List<Pod> pods, List<Tuple<int, int>> checkpoints)
+        public string calculateThrust(List<Pod> pods, Track track)
         {
-            int cX = checkpoints[nextCheckpointId].Item1;
-            int cY = checkpoints[nextCheckpointId].Item2;
+            if (id == 0)
+            {
+                return calculateSpeedyThrust(pods, track);
+            }
+            else
+            {
+                return calculateSpeedyThrust(pods, track);
+            }
+        }
 
-            Vector targetVector = new Vector(cX - position.x, cY - position.y);
+        string calculateSpeedyThrust(List<Pod> pods, Track track)
+        {
+            int cX = track.getX(nextCheckpointId);
+            int cY = track.getY(nextCheckpointId);
+
+            int nCX = track.getX((nextCheckpointId + 1) % track.length());
+            int nCY = track.getY((nextCheckpointId + 1) % track.length());
+            Vector cpVector = new Vector(cX - position.x, cY - position.y);
+            Vector nextCpVector = new Vector(nCX - position.x, nCY - position.y);
+
             Vector faceVector = new Vector(Math.Cos(angle * Math.PI / 180), Math.Sin(angle * Math.PI / 180));
 
-            int nextAngle = (int)(180 / Math.PI * Math.Acos(targetVector.scalar(faceVector) / targetVector.length() / faceVector.length()));
+
+            
 
             if (!usedBoost && id == 0)
             {
@@ -142,57 +165,102 @@ class Player
             }
 
             int thrust = 0;
-            int thrustX = cX;
-            int thrustY = cY;
-            if (Math.Abs(nextAngle) >= 70)
+            Vector thrustVector = null;
+            if (cpVector.length() > 1000 || (lap == track.laps && nextCheckpointId == track.length() - 1))
+            {
+                thrustVector = cpVector;
+            }
+            else
+            {
+                thrustVector = nextCpVector;
+            }
+
+            for (int i = 2; i < 4; i++)
+            {
+                if (willCollide(pods[i]))
+                {
+                    return thrustVector.x + " " + thrustVector.y + " SHIELD";
+                }
+            }
+
+            int nextAngle = thrustVector.angleTo(faceVector);
+
+
+            if (Math.Abs(nextAngle) >= 90)
             {
                 thrust = 0;
+            }
+            else if (Math.Abs(nextAngle) >= 70)
+            {
+                thrust = 50;
             }
             else
             {
                 thrust = 100;
             }
 
+            /*
             const int slowDown = 2000;
-            if (targetVector.length() < slowDown && Math.Abs(nextAngle) < 20)
+            if (thrustVector.length() < slowDown && Math.Abs(nextAngle) < 20)
             {
-                thrust = (int)(100 * targetVector.length() / slowDown);
-            }
+                thrust = (int)(100 * thrustVector.length() / slowDown);
+            }*/
 
-            int closest = 25000;
-            for (int i = 0; i < 4; i++)
-            {
-                if (i == id) continue;
-                closest = (int)Math.Min(position.sub(pods[i].position).length(), closest);
-            }
-
-            //TODO: Check for last checkpoint
-            if (/*!firstLap && !(lap == 3 && checkpointIndex == track.Count() - 1) &&*/
-                closest > 2000 && targetVector.length() < 2000 &&
-                speed.vectorRejection(targetVector).length() < 500)
-            {
-                int nextId = (nextCheckpointId + 1) % checkpoints.Count();
-                Vector nextTarget = new Vector(checkpoints[nextId].Item1 - cX, checkpoints[nextId].Item2 - cY);
-                if (nextTarget.scalar(targetVector) < 0)
-                {
-                    Console.Error.WriteLine("Pod " + id + " Coasting at angle " + nextAngle);
-                    return checkpoints[nextId].Item1 + " " + checkpoints[nextId].Item2 + " 0";
-                }
-            }
+            string message = " " + thrust;
 
 
             if (Math.Abs(nextAngle) <= 90)
             {
-                Vector rejection = speed.vectorRejection(targetVector);
-                Console.Error.WriteLine("Speed: " + speed.ToString());
-                Console.Error.WriteLine("Target: " + targetVector.ToString());
-                Console.Error.WriteLine("Projection: " + speed.vectorProjection(targetVector).ToString());
-                Console.Error.WriteLine("Rejection: " + speed.vectorRejection(targetVector).ToString());
-                thrustX -= (int)rejection.x * 4;
-                thrustY -= (int)rejection.y * 4;
+                Vector rejection = speed.vectorRejection(thrustVector);
+                //Console.Error.WriteLine("Speed: " + speed.ToString());
+                //Console.Error.WriteLine("Target: " + targetVector.ToString());
+                //Console.Error.WriteLine("Projection: " + speed.vectorProjection(targetVector).ToString());
+                //Console.Error.WriteLine("Rejection: " + speed.vectorRejection(targetVector).ToString());
+                thrustVector = thrustVector.sub(rejection.mul(4)); 
             }
 
-            return thrustX + " " + thrustY + " " + thrust;
+            if (thrustVector == nextCpVector)
+            {
+                message += " SLIDIN'";
+            }
+
+            return (int)(position.x+thrustVector.x) + " " + (int)(position.y+thrustVector.y) + " " + thrust;
+        }
+
+        string calculateSluggerThrust(List<Pod> pods, List<Tuple<int, int>> checkpoints)
+        {
+            int e1Progress = getProgress(pods[2]);
+            int e2Progress = getProgress(pods[3]);
+
+            Pod pod = e1Progress >= e2Progress ? pods[2] : pods[3];
+            Vector podV = pod.position.sub(position);
+            for (int i = 2; i < 4; i++)
+            {
+                if (willCollide(pods[i]))
+                {
+                    return "0 0 SHIELD";
+                }
+            }
+            if (podV.length() > 3000)
+            {
+                return checkpoints[pod.nextCheckpointId].Item1 + " " + checkpoints[pod.nextCheckpointId].Item2 + " 100";
+            }
+            else
+            {
+                return (pod.position.x + pod.speed.x) + " " + (pod.position.y + pod.speed.y) + " 100";
+            }
+
+        }
+
+        int getProgress(Pod pod)
+        {
+            return pod.lap * 10 + pod.nextCheckpointId;
+        }
+
+        const int COLLISION_THRESHOLD = 800;
+        bool willCollide(Pod pod)
+        {
+            return position.add(speed).sub(pod.position.add(pod.speed)).length() < COLLISION_THRESHOLD;
         }
 
         public Vector position { get; set; }
@@ -208,19 +276,74 @@ class Player
         private int lap { get; set; }
     }
 
+    private class Track
+    {
+        public List<Tuple<int, int>> checkpoints
+        {
+            get;
+            private set;
+        }
+
+        public int laps
+        {
+            get;
+            private set;
+        }
+
+        public Track(int laps)
+        {
+            this.laps = laps;
+            checkpoints = new List<Tuple<int, int>>();
+        }
+
+        public void addCheckpoint(int x, int y)
+        {
+            checkpoints.Add(new Tuple<int, int>(x, y));
+        }
+
+        public int getX(int checkpoint)
+        {
+            return checkpoints[checkpoint].Item1;
+        }
+
+        public int getY(int checkpoint)
+        {
+            return checkpoints[checkpoint].Item2;
+        }
+
+        public int length()
+        {
+            return checkpoints.Count();
+        }
+    }
+
     static void Main(string[] args)
     {
         string[] inputs;
-        List<Tuple<int, int>> track = new List<Tuple<int, int>>();
 
         int laps = int.Parse(Console.ReadLine());
         int checkpoints = int.Parse(Console.ReadLine());
+        Track track = new Track(laps);
         for (int i = 0; i < checkpoints; i++)
         {
             inputs = Console.ReadLine().Split(' ');
             int cX = int.Parse(inputs[0]);
             int cY = int.Parse(inputs[1]);
-            track.Add(new Tuple<int, int>(cX, cY));
+            track.addCheckpoint(cX, cY);
+        }
+
+        Track optimizedTrack = new Track(laps);
+        for (int i = 0; i < checkpoints; i++)
+        {
+            int id1 = (i + checkpoints - 1) % checkpoints;
+            int id2 = (i + 1) % checkpoints;
+
+            Vector v1 = new Vector(track.getX(id1) - track.getX(i), track.getY(id1) - track.getY(i));
+            Vector v2 = new Vector(track.getX(id2) - track.getX(i), track.getY(id2) - track.getY(i));
+
+            Vector v = v1.normalize().add(v2.normalize()).normalize().mul(300);
+
+            optimizedTrack.addCheckpoint(track.getX(i) + (int)v.x, track.getY(i) + (int)v.y);
         }
 
         List<Pod> pods = new List<Pod>();
@@ -245,7 +368,7 @@ class Player
 
             for (int i = 0; i < 2; i++)
             {
-                Console.WriteLine(pods[i].calculateThrust(pods, track));
+                Console.WriteLine(pods[i].calculateThrust(pods, optimizedTrack));
             }
         }
     }
