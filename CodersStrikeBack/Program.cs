@@ -102,6 +102,8 @@ class Player
 
     class Pod
     {
+        public const int MAX_ROTATION_PER_FRAME = 18;
+
         public Pod(int id, int team)
         {
             position = null;
@@ -156,8 +158,6 @@ class Player
             Vector faceVector = new Vector(Math.Cos(angle * Math.PI / 180), Math.Sin(angle * Math.PI / 180));
 
 
-            
-
             if (!usedBoost && id == 0)
             {
                 usedBoost = true;
@@ -166,7 +166,17 @@ class Player
 
             int thrust = 0;
             Vector thrustVector = null;
-            if (cpVector.length() > 1000 || (lap == track.laps && nextCheckpointId == track.length() - 1))
+
+            Vector toNext = new Vector(nCX - cX, nCY - cY);
+            int angleToNext = cpVector.angleTo(toNext);
+
+            //How much rotation is needed?
+            int rotationFramesNeeded = (int)Math.Ceiling((double)angleToNext / MAX_ROTATION_PER_FRAME);
+
+            //Rough estimate
+            int framesToCP = (int)(Math.Ceiling(cpVector.length() / speed.length()));
+
+            if (framesToCP > 3 || speed.length() < 100 || speed.vectorRejection(cpVector).length() > 600 || (lap == track.laps && nextCheckpointId == 0))
             {
                 thrustVector = cpVector;
             }
@@ -179,18 +189,17 @@ class Player
             {
                 if (willCollide(pods[i]))
                 {
-                    return thrustVector.x + " " + thrustVector.y + " SHIELD";
+                    return (int)(position.x + thrustVector.x) + " " + (int)(position.y + thrustVector.y) + " SHIELD";
                 }
             }
 
             int nextAngle = thrustVector.angleTo(faceVector);
 
-
             if (Math.Abs(nextAngle) >= 90)
             {
                 thrust = 0;
             }
-            else if (Math.Abs(nextAngle) >= 70)
+            else if (Math.Abs(nextAngle) >= 60)
             {
                 thrust = 50;
             }
@@ -216,7 +225,7 @@ class Player
                 //Console.Error.WriteLine("Target: " + targetVector.ToString());
                 //Console.Error.WriteLine("Projection: " + speed.vectorProjection(targetVector).ToString());
                 //Console.Error.WriteLine("Rejection: " + speed.vectorRejection(targetVector).ToString());
-                thrustVector = thrustVector.sub(rejection.mul(4)); 
+                thrustVector = thrustVector.sub(rejection.mul(4));
             }
 
             if (thrustVector == nextCpVector)
@@ -224,7 +233,7 @@ class Player
                 message += " SLIDIN'";
             }
 
-            return (int)(position.x+thrustVector.x) + " " + (int)(position.y+thrustVector.y) + " " + thrust;
+            return (int)(position.x + thrustVector.x) + " " + (int)(position.y + thrustVector.y) + " " + thrust;
         }
 
         string calculateSluggerThrust(List<Pod> pods, List<Tuple<int, int>> checkpoints)
